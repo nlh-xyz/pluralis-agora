@@ -1,0 +1,13 @@
+# Secrets / config
+.env
+
+# Cloned upstream repo (bootstrapped at runtime)
+/agora/
+
+# Node identity keys — never commit
+private_gpu*.key
+*.key
+
+# Runtime logs
+logs/
+*.log
