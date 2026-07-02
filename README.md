@@ -74,7 +74,12 @@ authorization fails with `Port <N> is closed` (which the script treats as fatal)
 
 - **Native execution** in a venv built from `python3.11`. No Docker.
 - Requires **Python 3.11** (+ `python3.11-venv` on Debian/Ubuntu) and a CUDA GPU.
-  The script checks for these but does **not** install python itself.
+  The script checks for these but does **not** install python itself. (`agora_cli.py`
+  only offers a conda env *interactively* and can't install 3.11 under `--skip_input`,
+  so Python 3.11 is a prerequisite.) Quick installs:
+  - conda: `conda create -y -n agora python=3.11 && conda activate agora`
+  - Debian 12: `sudo apt-get install -y python3.11 python3.11-venv python3.11-dev`
+  - Ubuntu: `sudo add-apt-repository -y ppa:deadsnakes/ppa && sudo apt-get update && sudo apt-get install -y python3.11 python3.11-venv python3.11-dev`
 - Multiple GPUs: run one instance per GPU with a distinct `AGORA_GPU_ID` and
   distinct ports.
 - The upstream client under `agora/` runs an integrity check — this repo never

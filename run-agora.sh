@@ -91,8 +91,12 @@ preflight() {
   if command -v python3.11 >/dev/null 2>&1; then
     PYTHON_BIN="python3.11"
   else
-    die "python3.11 not found. Pluralis Agora requires Python 3.11.
-     Install it (e.g. 'sudo apt install python3.11' on Debian/Ubuntu, or via pyenv) and re-run."
+    die "python3.11 not found. Pluralis Agora requires Python 3.11. Install it, then re-run:
+       conda:          conda create -y -n agora python=3.11 && conda activate agora
+       Debian 12:      sudo apt-get install -y python3.11 python3.11-venv python3.11-dev
+       Ubuntu:         sudo add-apt-repository -y ppa:deadsnakes/ppa && sudo apt-get update \\
+                         && sudo apt-get install -y python3.11 python3.11-venv python3.11-dev
+     (agora_cli.py only offers a conda env interactively and can't install 3.11 under --skip_input.)"
   fi
 
   # We run inside a venv (isolated, upgradable pip). Needs the venv/ensurepip
