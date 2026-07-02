@@ -39,7 +39,7 @@ AGORA_REPO_URL="${AGORA_REPO_URL:-https://github.com/PluralisResearch/agora}"
 # Output patterns used to classify why a run ended, checked in order per attempt.
 # FATAL: non-retryable — a wrong port / bad token / ineligibility never recovers,
 # so we fail fast instead of looping forever.
-FATAL_MARKERS='Port [0-9]+ is closed|Invalid HuggingFace token|Verification failed|not eligible|not installed\. Run:'
+FATAL_MARKERS='Port [0-9]+ is closed|Invalid HuggingFace token|Verification failed|not eligible|not installed\. Run:|CUDA is not available'
 # QUEUE: we already hold a slot in the auth queue — back off longer, keep the key.
 QUEUE_MARKERS='already in the authorization queue'
 # RETRY: the network is at capacity — poll again after the normal interval.
