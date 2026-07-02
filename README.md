@@ -18,10 +18,12 @@ That's it. The script will:
 1. **Pre-flight** — verify `HF_TOKEN`, `git`, and `python3.11` are present
    (fails fast on misconfig instead of hot-looping).
 2. **Bootstrap** — `git clone` the agora repo into `$AGORA_DIR` if it's missing
-   (existing clones are left as-is), then install the native python packages if
-   they're not present. (The client only installs deps interactively; with
-   `--skip_input` it just errors, so the runner runs its install commands —
-   cu128 torch + editable `./agora_server` and `./agora` — once on a fresh box.)
+   (existing clones are left as-is), create an isolated **venv** at `$AGORA_VENV`,
+   then install the native python packages into it if they're not present. (The
+   client only installs deps interactively; with `--skip_input` it just errors,
+   so the runner runs its install commands — cu128 torch + editable
+   `./agora_server` and `./agora` — once on a fresh box. Using a venv avoids the
+   Debian system-pip that can't self-upgrade, `RECORD file not found`.)
 3. **Supervise** — run `agora_cli.py start --skip_input ...` in a loop, classifying
    each exit (in priority order):
    - **non-retryable** (closed port, invalid token, ineligible) → **exit** with the
@@ -46,6 +48,7 @@ auto-sourced). See [`.env.example`](.env.example).
 | `AGORA_ANNOUNCE_PORT` | `--announce_port` | no | `49200 + gpu_id` |
 | `AGORA_GPU_ID` | `--gpu_id` | no | `0` |
 | `AGORA_DIR` | clone/target dir | no | `./agora` |
+| `AGORA_VENV` | virtualenv location | no | `./.venv` |
 | `AGORA_RETRY_INTERVAL` | retry sleep (s) | no | `10` |
 | `AGORA_QUEUE_BACKOFF` | wait when already queued (s) | no | `90` |
 | `AGORA_REPO_URL` | clone source | no | `PluralisResearch/agora` |
@@ -69,9 +72,9 @@ authorization fails with `Port <N> is closed` (which the script treats as fatal)
 
 ## Notes
 
-- **Native execution** (python3.11), matching the standard workspace setup. No Docker.
-- Requires **Python 3.11** and a CUDA GPU (per Pluralis requirements). The script
-  checks for python3.11 but does **not** install it for you.
+- **Native execution** in a venv built from `python3.11`. No Docker.
+- Requires **Python 3.11** (+ `python3.11-venv` on Debian/Ubuntu) and a CUDA GPU.
+  The script checks for these but does **not** install python itself.
 - Multiple GPUs: run one instance per GPU with a distinct `AGORA_GPU_ID` and
   distinct ports.
 - The upstream client under `agora/` runs an integrity check — this repo never

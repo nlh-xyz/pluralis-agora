@@ -4,6 +4,10 @@
 # Cloned upstream repo (bootstrapped at runtime)
 /agora/
 
+# Runtime virtualenv
+/.venv/
+.venv/
+
 # Node identity keys — never commit
 private_gpu*.key
 *.key

@@ -31,6 +31,7 @@ AGORA_HOST_PORT="${AGORA_HOST_PORT:-}"
 AGORA_ANNOUNCE_PORT="${AGORA_ANNOUNCE_PORT:-}"
 AGORA_GPU_ID="${AGORA_GPU_ID:-0}"
 AGORA_DIR="${AGORA_DIR:-${SCRIPT_DIR}/agora}"
+AGORA_VENV="${AGORA_VENV:-${SCRIPT_DIR}/.venv}"
 AGORA_RETRY_INTERVAL="${AGORA_RETRY_INTERVAL:-10}"
 AGORA_QUEUE_BACKOFF="${AGORA_QUEUE_BACKOFF:-90}"
 AGORA_REPO_URL="${AGORA_REPO_URL:-https://github.com/PluralisResearch/agora}"
@@ -94,6 +95,11 @@ preflight() {
      Install it (e.g. 'sudo apt install python3.11' on Debian/Ubuntu, or via pyenv) and re-run."
   fi
 
+  # We run inside a venv (isolated, upgradable pip). Needs the venv/ensurepip
+  # stdlib modules, which Debian splits into a separate package.
+  "${PYTHON_BIN}" -c 'import venv, ensurepip' 2>/dev/null \
+    || die "python3.11 venv support missing. On Debian/Ubuntu: sudo apt-get install -y python3.11-venv"
+
   [[ "${AGORA_GPU_ID}" =~ ^[0-9]+$ ]] || die "AGORA_GPU_ID must be an integer (got '${AGORA_GPU_ID}')."
   [[ "${AGORA_RETRY_INTERVAL}" =~ ^[0-9]+$ ]] || die "AGORA_RETRY_INTERVAL must be an integer seconds value."
   [[ "${AGORA_QUEUE_BACKOFF}" =~ ^[0-9]+$ ]] || die "AGORA_QUEUE_BACKOFF must be an integer seconds value."
@@ -114,7 +120,26 @@ bootstrap() {
 
   [[ -f "${AGORA_DIR}/agora_cli.py" ]] || die "agora_cli.py not found in ${AGORA_DIR}."
 
+  ensure_venv
   ensure_deps
+}
+
+# ---------------------------------------------------------------------------
+# ensure_venv — create/reuse an isolated venv and set VENV_PY.
+# Kept OUTSIDE agora/ so we never add files to the client tree (integrity check).
+# The venv has its own pip that upgrades cleanly, unlike a Debian-managed system
+# pip (which fails with "Cannot uninstall pip, RECORD file not found").
+# ---------------------------------------------------------------------------
+ensure_venv() {
+  VENV_PY="${AGORA_VENV}/bin/python"
+  if [[ -x "${VENV_PY}" ]]; then
+    log "using existing virtualenv at ${AGORA_VENV}."
+  else
+    log "creating virtualenv at ${AGORA_VENV} ..."
+    "${PYTHON_BIN}" -m venv "${AGORA_VENV}" \
+      || die "failed to create venv at ${AGORA_VENV}. On Debian/Ubuntu: sudo apt-get install -y python3.11-venv"
+  fi
+  [[ -x "${VENV_PY}" ]] || die "venv python not found at ${VENV_PY} after creation."
 }
 
 # ---------------------------------------------------------------------------
@@ -127,7 +152,7 @@ bootstrap() {
 ensure_deps() {
   # Detect from a clean cwd so the local ./agora source dir can't shadow the
   # check (find_spec locates without importing/executing the package).
-  if ( cd / && "${PYTHON_BIN}" -c 'import importlib.util as u,sys; sys.exit(0 if u.find_spec("agora") and u.find_spec("agora_server") else 1)' ) 2>/dev/null; then
+  if ( cd / && "${VENV_PY}" -c 'import importlib.util as u,sys; sys.exit(0 if u.find_spec("agora") and u.find_spec("agora_server") else 1)' ) 2>/dev/null; then
     log "agora python packages already installed."
     return
   fi
@@ -136,12 +161,12 @@ ensure_deps() {
   log "installing agora python packages (first run — this can take a while)..."
   (
     cd "${AGORA_DIR}" || exit 1
-    "${PYTHON_BIN}" -m pip install --upgrade "pip>=25.3" \
-      && "${PYTHON_BIN}" -m pip install torch==2.7.0 --index-url https://download.pytorch.org/whl/cu128 \
-      && "${PYTHON_BIN}" -m pip install --constraint constraints.txt --build-constraint constraints.txt -e ./agora_server \
-      && "${PYTHON_BIN}" -m pip install --constraint constraints.txt --build-constraint constraints.txt -e ./agora
+    "${VENV_PY}" -m pip install --upgrade "pip>=25.3" \
+      && "${VENV_PY}" -m pip install torch==2.7.0 --index-url https://download.pytorch.org/whl/cu128 \
+      && "${VENV_PY}" -m pip install --constraint constraints.txt --build-constraint constraints.txt -e ./agora_server \
+      && "${VENV_PY}" -m pip install --constraint constraints.txt --build-constraint constraints.txt -e ./agora
   ) || die "dependency install failed. Fix the environment, then re-run. Manual command (from ${AGORA_DIR}):
-    ${PYTHON_BIN} -m pip install --constraint constraints.txt --build-constraint constraints.txt -e ./agora_server && ${PYTHON_BIN} -m pip install --constraint constraints.txt --build-constraint constraints.txt -e ./agora"
+    ${VENV_PY} -m pip install --constraint constraints.txt --build-constraint constraints.txt -e ./agora_server && ${VENV_PY} -m pip install --constraint constraints.txt --build-constraint constraints.txt -e ./agora"
   log "agora python packages installed."
 }
 
@@ -189,12 +214,12 @@ supervise() {
   while [[ "${STOP}" -eq 0 ]]; do
     attempt=$((attempt + 1))
     : > "${run_log}"
-    log "=== attempt #${attempt}: ${PYTHON_BIN} agora_cli.py ${ARGS[*]//${HF_TOKEN}/<HF_TOKEN>} ==="
+    log "=== attempt #${attempt}: ${VENV_PY} agora_cli.py ${ARGS[*]//${HF_TOKEN}/<HF_TOKEN>} ==="
 
     # CHILD_PID is the client itself (not tee), so the trap kills the real
     # process on Ctrl+C and rc below is the client's own exit code. Output is
     # mirrored to the terminal and captured for post-mortem classification.
-    "${PYTHON_BIN}" agora_cli.py "${ARGS[@]}" > >(tee "${run_log}") 2>&1 &
+    "${VENV_PY}" agora_cli.py "${ARGS[@]}" > >(tee "${run_log}") 2>&1 &
     CHILD_PID=$!
     wait "${CHILD_PID}"
     rc=$?
