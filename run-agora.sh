@@ -38,7 +38,7 @@ AGORA_REPO_URL="${AGORA_REPO_URL:-https://github.com/PluralisResearch/agora}"
 # Output patterns used to classify why a run ended, checked in order per attempt.
 # FATAL: non-retryable — a wrong port / bad token / ineligibility never recovers,
 # so we fail fast instead of looping forever.
-FATAL_MARKERS='Port [0-9]+ is closed|Invalid HuggingFace token|Verification failed|not eligible'
+FATAL_MARKERS='Port [0-9]+ is closed|Invalid HuggingFace token|Verification failed|not eligible|not installed\. Run:'
 # QUEUE: we already hold a slot in the auth queue — back off longer, keep the key.
 QUEUE_MARKERS='already in the authorization queue'
 # RETRY: the network is at capacity — poll again after the normal interval.
@@ -113,6 +113,36 @@ bootstrap() {
   fi
 
   [[ -f "${AGORA_DIR}/agora_cli.py" ]] || die "agora_cli.py not found in ${AGORA_DIR}."
+
+  ensure_deps
+}
+
+# ---------------------------------------------------------------------------
+# ensure_deps — install the native python packages if missing.
+# With --skip_input the client will NOT install them itself (it only errors and
+# exits), so on a fresh box we run the CLI's own install commands once. These
+# are exactly what upstream's interactive installer runs (same editable installs
+# into the same tree), so they're consistent with the client's integrity check.
+# ---------------------------------------------------------------------------
+ensure_deps() {
+  # Detect from a clean cwd so the local ./agora source dir can't shadow the
+  # check (find_spec locates without importing/executing the package).
+  if ( cd / && "${PYTHON_BIN}" -c 'import importlib.util as u,sys; sys.exit(0 if u.find_spec("agora") and u.find_spec("agora_server") else 1)' ) 2>/dev/null; then
+    log "agora python packages already installed."
+    return
+  fi
+
+  [[ -f "${AGORA_DIR}/constraints.txt" ]] || die "constraints.txt not found in ${AGORA_DIR}; cannot install deps."
+  log "installing agora python packages (first run — this can take a while)..."
+  (
+    cd "${AGORA_DIR}" || exit 1
+    "${PYTHON_BIN}" -m pip install --upgrade "pip>=25.3" \
+      && "${PYTHON_BIN}" -m pip install torch==2.7.0 --index-url https://download.pytorch.org/whl/cu128 \
+      && "${PYTHON_BIN}" -m pip install --constraint constraints.txt --build-constraint constraints.txt -e ./agora_server \
+      && "${PYTHON_BIN}" -m pip install --constraint constraints.txt --build-constraint constraints.txt -e ./agora
+  ) || die "dependency install failed. Fix the environment, then re-run. Manual command (from ${AGORA_DIR}):
+    ${PYTHON_BIN} -m pip install --constraint constraints.txt --build-constraint constraints.txt -e ./agora_server && ${PYTHON_BIN} -m pip install --constraint constraints.txt --build-constraint constraints.txt -e ./agora"
+  log "agora python packages installed."
 }
 
 # ---------------------------------------------------------------------------

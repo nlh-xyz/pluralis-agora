@@ -18,8 +18,10 @@ That's it. The script will:
 1. **Pre-flight** — verify `HF_TOKEN`, `git`, and `python3.11` are present
    (fails fast on misconfig instead of hot-looping).
 2. **Bootstrap** — `git clone` the agora repo into `$AGORA_DIR` if it's missing
-   (existing clones are left as-is). `agora_cli.py` sets up its own deps/weights
-   on first run.
+   (existing clones are left as-is), then install the native python packages if
+   they're not present. (The client only installs deps interactively; with
+   `--skip_input` it just errors, so the runner runs its install commands —
+   cu128 torch + editable `./agora_server` and `./agora` — once on a fresh box.)
 3. **Supervise** — run `agora_cli.py start --skip_input ...` in a loop, classifying
    each exit (in priority order):
    - **non-retryable** (closed port, invalid token, ineligible) → **exit** with the
